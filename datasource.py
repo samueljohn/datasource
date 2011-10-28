@@ -137,8 +137,8 @@ class DataSource(mdp.Node):
         '''
         super(DataSource,self).__init__(output_dim=output_dim, **kws)
         self.name                         = name
-        self._safemode                    = safemode
         self.add_logger(loglevel)
+        self._safemode                    = safemode
         self._number_of_samples_until_now = 0
         self._last_label_nr               = 0
         if number_of_samples_max is not None:
@@ -404,10 +404,12 @@ class SeededDataSource(DataSource):
         self.random = S.random.RandomState(seed=self.seed)
 
 
-    def reset(self):
+    def reset(self, seed=None):
         DataSource.reset(self)
         self.log.info('Resetting random seed to initial value %s',self.seed)
-        self.random = S.random.RandomState(seed=self.seed)
+        if seed is None:
+            seed = self.seed
+        self.random = S.random.RandomState(seed=seed)
         
 
 
@@ -1335,11 +1337,9 @@ class NoisyFigure3dDataSource(SeededDataSource):
 
 
 
-
-
 if __name__ == "__main__":
     U = UniformDataSource(limits=[ [0.0, .2], [0.0, 1.0] ])
-    U.density(shape)
+    U.density()
     print( 'sample from U:' )
     print( U.sample() )
     print( U.sample() )
