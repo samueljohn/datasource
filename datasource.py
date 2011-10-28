@@ -406,9 +406,10 @@ class SeededDataSource(DataSource):
 
     def reset(self, seed=None):
         DataSource.reset(self)
-        self.log.info('Resetting random seed to initial value %s',self.seed)
         if seed is None:
+            self.log.info('Resetting random seed to initial value %s',self.seed)
             seed = self.seed
+        self.log.info('Resetting random seed to value %s',str(seed))
         self.random = S.random.RandomState(seed=seed)
         
 
