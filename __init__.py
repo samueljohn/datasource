@@ -1,5 +1,11 @@
 '''
+Generic base classes for data sources. The concept of being able to produce
+infinitely many samples from an underlying distribution (or some other
+production rule) is manifested by the MDP-compatible class DataSource.
 
+The classes are abstract enough to represent any kind of data -- from images
+to time series. The only limitation is that each sample should have the 
+same number of elements (dimension).
 
 @copyright: 
     2009-2011, Samuel John
@@ -21,7 +27,20 @@
    limitations under the License.
 '''
 
-from datasource import *
+from datasource import (DataSource, DataSourceException, NoMoreSamplesException, 
+                        FlowDataSource, SeededDataSource, ProbabilityDataSource,
+                        DensityDataSource, CompositeDataSource, CascadedDataSource,
+                        NoDuplicatesCascadedDataSource, TrainingSetDataSource,
+                        TestSetDataSource, ImageDataSource, ImageFilesDataSource,
+                        ImageFilesObjViewDataSource, UniformDataSource,
+                        NoisyFigure3dDataSource )
 
-# todo: add license
+__version__   = '0.3'
+#__revision__  = utils.get_git_revision()
+__authors__   = 'Samuel John'
+__copyright__ = '2009-2011, Samuel John'
+__license__   = 'APACHE 2.0, http://www.apache.org/licenses/LICENSE-2.0'
+__contact__   = 'mail@SamuelJohn.de'
+#__homepage__  = add github page here
+
 # todo: do not import everything from datasource but only needed stuff

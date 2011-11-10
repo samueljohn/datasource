@@ -1,13 +1,4 @@
 '''
-Generic base classes for data sources. The concept of being able to produce
-infinitely many samples from an underlying distribution (or some other
-production rule) is manifested by the MDP-compatible class DataSource.
-
-The classes are abstract enough to represent any kind of data -- from images
-to time series. The only limitation is that each sample should have the 
-same number of elements (dimension).
-
-
 @copyright: 
     2009-2011, Samuel John
 @author: 
@@ -38,12 +29,8 @@ from __future__ import absolute_import, division, print_function
 import mdp
 import scipy as S
 from scipy import where, zeros
-from time import time
-import abc
 import logging
 import os
-
-random_integers = S.random.random_integers
 
 
 
@@ -67,7 +54,7 @@ class DataSource(mdp.Node):
     A class that represents a data source with samples of fixed
     dimensionality.
 
-    This class defines the methods sample() and samples(n).
+    Foremost, this class defines the methods sample() and samples(n).
 
     Additionally a data source D can be used as a mdp.Node. So, if you call
     the object as D() or call D.samples(n), the result is directly
@@ -115,7 +102,7 @@ class DataSource(mdp.Node):
     '''
 
     def __init__(self, output_dim=2, safemode=True, name="",
-                 number_of_samples_execute=1,
+                 number_of_samples_execute=None,
                  number_of_samples_max=None,
                  loglevel=logging.INFO, **kws):
         '''
@@ -125,7 +112,7 @@ class DataSource(mdp.Node):
             Perform extra checks here and there. Default=True
         @param number_of_samples_execute:
             How many samples to draw when calling this DataSource as an
-            mdp.Node.
+            mdp.Node. 
         @param name:
             An optional speaking name for this DS. Makes sense if you have
             the same type of data source, once for training and once for
@@ -141,11 +128,20 @@ class DataSource(mdp.Node):
         self._safemode                    = safemode
         self._number_of_samples_until_now = 0
         self._last_label_nr               = 0
+        
         if number_of_samples_max is not None:
             self._number_of_samples_max   = number_of_samples_max
         else:
             self._number_of_samples_max   = S.Infinity
-        self.number_of_samples_execute    = number_of_samples_execute
+
+        if number_of_samples_execute is None:
+            if self.number_of_samples_max < S.Infinity:
+                self.number_of_samples_execute = self.number_of_samples_max
+            else:
+                self.number_of_samples_execute = 1
+        else:
+            self.number_of_samples_execute    = number_of_samples_execute
+            
 
 
     @property
@@ -153,10 +149,12 @@ class DataSource(mdp.Node):
         '''@deprecated: Use sefl.output_dim (which is provided by mdp.Node)'''
         return self._output_dim
 
+
     @property
     def number_of_samples_until_now(self):
         '''How may samples have been drawn from this data source until now.'''
         return self._number_of_samples_until_now
+
 
     @property
     def number_of_samples_max(self):
@@ -164,6 +162,7 @@ class DataSource(mdp.Node):
         Use number_of_samples_still_available() if you want to know if it
         is safe to call samples(n) with some n.'''
         return self._number_of_samples_max
+
 
     @property
     def number_of_samples_still_available(self):
@@ -293,9 +292,9 @@ class DataSource(mdp.Node):
 
     def reset(self):
         self.log.info('resetting.')
-        self._reset() # give subclass a change to react
         self._number_of_samples_until_now = 0
         self._last_label_nr = 0
+        self._reset() # give subclass a change to react
 
 
     def is_trainable(self):
@@ -304,6 +303,7 @@ class DataSource(mdp.Node):
 
     def is_invertible(self):
         return False
+
 
     @property
     def allows_duplicate_labels(self):
@@ -379,13 +379,91 @@ class DataSource(mdp.Node):
 
     def __add__(self,other):
         '''
-        Adding datasources makes no sense if the probability density is unknown.
-        In order to hide the corresponding function from mdp, we overwrite
-        them here. See ProbabilityDataSource for __add__ (and other operations).
+        Adding mdp nodes to a datasource yields a FlowDataSource, which consists
+        of a DataSource and a number of mdp.Nodes that are ready to execute.
         '''
-        raise NotImplemented
+        return FlowDataSource( mdp.Node.__add__(self, other) )
+    
 
 
+class FlowDataSource(DataSource):
+    '''With a FlowDataSource it is possible to compose a data source that
+    consists of any DataSource and a number of mdp.Nodes that act upon 
+    each sample from that data source.
+    
+    For example it is possible to artificially make the data more noise
+    by adding a mdp.NoiseNode.
+
+    The __add__ method if DataSource handles the case when you add a Node
+    to any DataSource.
+    DS_combined = DS + mdp.NoiseNode()
+
+    '''
+    def __init__(self, flow, **kws):
+        '''Init with an mdp.Flow (where only the first Node can be a DS).'''
+        self.flow = flow
+        if not isinstance(flow[0],DataSource):
+            raise ValueError('The first instance of the mdp.Flow given to a FlowDataSource has to be an instance of DataSource but was %s' % str(type(flow[0])))
+        super(FlowDataSource,self).__init__(output_dim=flow[-1].output_dim,
+                                            number_of_samples_execute=flow[0].number_of_samples_execute,
+                                            number_of_samples_max=flow[0].number_of_samples_max,
+                                             **kws)
+        
+        
+    @property
+    def allows_duplicate_labels(self):
+        return self.flow[0].allows_duplicate_labels
+
+
+    @property
+    def number_of_samples_still_available(self):
+        return self.flow[0].number_of_samples_still_available
+    
+    
+    def _get_supported_dtypes(self):
+        return self.flow[0]._get_supported_dtypes()
+    
+    
+    def _allows_duplicate_labels(self):
+        return self.flow[0]._allows_duplicate_labels()
+    
+    
+    def _get_labels(self, n, start):
+        return self.flow[0]._get_labels(n, start)
+    
+        
+    def _reset(self):
+        self.flow[0].reset()
+
+
+    def _samples(self,n=1, **kws):
+        d = self.flow[0].samples(n=n, **kws)
+        rest = self.flow[1:]
+        if len(rest) > 0:
+            return rest.execute(d)
+        else:   
+            return d
+    
+    
+    def __repr__(self):
+        name = self.name
+        if name is None: name = ''
+        return '<FlowDataSource [%s]>' % (', '.join(repr(f) for f in self.flow))
+
+    
+    def __str__(self):
+        name = self.name
+        if name is None: name = ''
+        return '<%s>' % (' + '.join(str(f) for f in self.flow))
+
+    
+    def __add__(self, other):
+        self.flow += other
+        assert isinstance(other, mdp.Node)
+        self._output_dim = self.flow[-1].output_dim
+        return self
+    
+    
 
 class SeededDataSource(DataSource):
     '''An abstract DataSource that adds tracking of the random generator's
@@ -456,6 +534,7 @@ class ProbabilityDataSource(DataSource):
         Subclass should implement this'''
         raise NotImplementedError()
 
+
     def density(self, shape=None):
         if shape is None:
             shape = tuple([100]*self.output_dim)
@@ -508,6 +587,7 @@ class ProbabilityDataSource(DataSource):
         '''
         return CompositeDataSource([self,other],composition='min',
                                    safemode=self._safemode)
+
 
     def __mul__(self, other):
         '''
@@ -579,6 +659,7 @@ class DensityDataSource(SeededDataSource,ProbabilityDataSource):
         self.loadfactors = [ len(where( (i+1.0)/10.0 <= self._density )[0])/float((S.size(self._density)))
                              for i in range(10)]
         #print 'loadfactors', self.loadfactors
+
 
     def _sample(self):
         r = self.random.uniform()
@@ -1068,7 +1149,6 @@ class ImageFilesDataSource(ImageDataSource):
             self._number_of_samples_until_now += 1
         arr = self._imread(self.files[nr]).flatten()
         return arr 
-
         
         
 
@@ -1127,7 +1207,6 @@ class ImageFilesObjViewDataSource(ImageFilesDataSource, SeededDataSource):
         for ns, vs in r:
             yield self.filename_template % dict(zip(ns,vs))
     
-            
     
     def _sample(self, **kws):
         d = dict()
@@ -1154,51 +1233,6 @@ class ImageFilesObjViewDataSource(ImageFilesDataSource, SeededDataSource):
 
 
 
-class LSRDatabaseDescriptionImageDataSource(ImageDataSource, SeededDataSource):
-    '''
-    @todo: read database_description file (look into old PyLSRDatabaseTools code.
-    @todo: also support databaseDescriptionNew
-    @todo: Accept filename or file object.
-    @todo: Add method that checks if all files are available on the fs.
-    @todo: define constants for CLUTTER, BACKGROUND...
-    @todo: Use self.seed for random stuff
-    @todo: log which images and views have been chosen
-    @todo: Automatically import BPL_images when needed.
-    '''
-    def __init__(self, database_description=None, **kws):
-        super(LSRDatabaseDescriptionImageDataSource,self).__init__(self, **kws)
-        # todo : set _number_of_samples_max: if allow_duplicates=False
-        # todo:  option: allow duplicates: Whether an image may be sampled twice
-        raise NotImplemented
-
-
-    def _sample(self, **kws):
-        # Each datasource can define use args and kws
-        # map objID and viewID to filenames
-        # if only objID and not viewID given, return a random view
-        # permutate views: True/False ?
-        return
-
-
-    def _get_labels(self):
-        '''
-        @todo: return objID, viewID'''
-        raise NotImplemented
-        pass
-
-
-    def is_clutter(self):
-        raise NotImplemented
-
-
-    def is_background(self):
-        raise NotImplemented
-
-    def _reset(self):
-        raise NotImplemented
-
-
-
 class UniformDataSource(SeededDataSource, ProbabilityDataSource):
     def __init__(self,
                  limits=[ [0.0, 1.0], [0.0, 1.0] ],
@@ -1221,14 +1255,13 @@ class UniformDataSource(SeededDataSource, ProbabilityDataSource):
     def probability(self,x):
         '''Unnormalized probability returns 1.0 if point belongs to
         this data source and 0.0 else.'''
-        # Faster implementation that the density based approach
+        # Faster implementation than the density based approach
         for d in range(self.output_dim):
             if self.limits[d][0] <= x[d] <= self.limits[d][1]:
                 continue
             else:
                 return 0.0
         return 1.0
-
 
 
 
@@ -1333,36 +1366,3 @@ class NoisyFigure3dDataSource(SeededDataSource):
         raise NotImplementedError()
 
 
-
-
-
-
-
-if __name__ == "__main__":
-    U = UniformDataSource(limits=[ [0.0, .2], [0.0, 1.0] ])
-    U.density()
-    print( 'sample from U:' )
-    print( U.sample() )
-    print( U.sample() )
-    print( U.sample() )
-    print( U.sample() )
-
-    print ('sample from U as mdp Node:' )
-    print (U(S.array([[]])) ) # to satisfy mdp, we need something as the arg
-
-    prin('-----')
-    t1 = time()
-    U.samples(100)
-    t2 = time()
-    print('time:', t2-t1,'s')
-
-
-    print('-----')
-
-    U3 = UniformDataSource(limits=[[.01,.02],[.9,1.0]])
-    t1 = time()
-    U3.samples(1000)
-    t2 = time()
-    print('U3 time:', t2-t1,'s' )
-
-    print(' finished')
