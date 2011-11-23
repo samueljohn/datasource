@@ -140,7 +140,7 @@ class DataSource(mdp.Node):
             else:
                 self.number_of_samples_execute = 1
         else:
-            self.number_of_samples_execute    = number_of_samples_execute
+            self.number_of_samples_execute     = number_of_samples_execute
             
 
 
@@ -228,6 +228,8 @@ class DataSource(mdp.Node):
         _samples if it thinks that multiple can be generated more efficiently
         than calling _sample multiple times. The latter is done automatically.'''
         self.log.debug('Requested %i samples.',n)
+        if n is S.Infinity:
+            raise DataSourceException('You cannot get infinitely many samples at once.')
         if self.number_of_samples_still_available < n:
             #if self._number_of_samples_until_now+n > self.number_of_samples_max:
             raise NoMoreSamplesException('This data source is exhausted. It has already produced %i samples. Cannot draw n=%i additional samples.' % (self._number_of_samples_until_now, n))
@@ -242,6 +244,11 @@ class DataSource(mdp.Node):
         except NoMoreSamplesException,e:
             raise StopIteration(str(e))
 
+
+    def all_samples(self):
+        'Get all remaining samples or one samples if the DS is infinit.'
+        return self.samples(n=self.number_of_samples_still_available)
+        
 
     def _execute(self, x, n=None, **kws):
         '''
@@ -462,6 +469,11 @@ class FlowDataSource(DataSource):
         assert isinstance(other, mdp.Node)
         self._output_dim = self.flow[-1].output_dim
         return self
+    
+    
+    def __get__(self,i):
+        return self.flow[i]
+    
     
     
 
