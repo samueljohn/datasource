@@ -471,7 +471,7 @@ class FlowDataSource(DataSource):
         return self
     
     
-    def __get__(self,i):
+    def __getitem__(self,i):
         return self.flow[i]
     
     
