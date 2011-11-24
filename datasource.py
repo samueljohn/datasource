@@ -475,6 +475,9 @@ class FlowDataSource(DataSource):
         return self.flow[i]
     
     
+    def ranges(self):
+        'The ranges of this FlowDataSource is defined by the first DS in the self.flow'
+        return self.flow[0].ranges()
     
 
 class SeededDataSource(DataSource):
