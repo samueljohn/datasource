@@ -245,10 +245,17 @@ class DataSource(mdp.Node):
             raise StopIteration(str(e))
 
 
-    def all_samples(self):
+    def all_remaining_samples(self):
         'Get all remaining samples or one samples if the DS is infinit.'
         return self.samples(n=self.number_of_samples_still_available)
         
+
+    def all_samples(self, reset=True):
+        '''Get all samples after self.reset if reset=True if the DS is finite.
+        Or one samples if the DS is infinit.'''
+        if reset: self.reset()
+        return self.samples(n=self.number_of_samples_still_available)
+
 
     def _execute(self, x, n=None, **kws):
         '''
