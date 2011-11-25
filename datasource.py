@@ -468,7 +468,7 @@ class FlowDataSource(DataSource):
     def __str__(self):
         name = self.name
         if name is None: name = ''
-        return '<%s>' % (' + '.join(str(f) for f in self.flow))
+        return '<%s>' % ('\n + '.join(str(f) for f in self.flow))
 
     
     def __add__(self, other):
