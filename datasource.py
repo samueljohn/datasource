@@ -252,8 +252,8 @@ class DataSource(mdp.Node):
 
     def all_samples(self, reset=True):
         '''Get all samples after self.reset if reset=True if the DS is finite.
-        Or one samples if the DS is infinit.'''
-        if reset: self.reset()
+        Or one samples if the DS is infinite.'''
+        if reset: self.reset(verbose=False)
         return self.samples(n=self.number_of_samples_still_available)
 
 
@@ -304,8 +304,9 @@ class DataSource(mdp.Node):
         return self._get_labels(n=n, start=start)
 
 
-    def reset(self):
-        self.log.info('resetting.')
+    def reset(self,verbose=True):
+        '''Resetting this datasource, so the first samples it returned again on next sample().'''
+        if verbose: self.log.info('resetting.')
         self._number_of_samples_until_now = 0
         self._last_label_nr = 0
         self._reset() # give subclass a change to react
