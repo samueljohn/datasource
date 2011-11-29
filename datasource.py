@@ -505,8 +505,8 @@ class SeededDataSource(DataSource):
         self.random = S.random.RandomState(seed=self.seed)
 
 
-    def reset(self, seed=None):
-        DataSource.reset(self)
+    def reset(self, seed=None, **kws):
+        DataSource.reset(self, **kws)
         if seed is None:
             self.log.info('Resetting random seed to initial value %s',self.seed)
             seed = self.seed
