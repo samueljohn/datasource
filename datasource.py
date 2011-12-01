@@ -198,7 +198,7 @@ class DataSource(mdp.Node):
         raise NotImplementedError()
 
 
-    def _reset(self):
+    def _reset(self, **kws):
         '''Subclass may override this.'''
         pass
 
@@ -304,12 +304,12 @@ class DataSource(mdp.Node):
         return self._get_labels(n=n, start=start)
 
 
-    def reset(self,verbose=True):
+    def reset(self,verbose=True, **kws):
         '''Resetting this datasource, so the first samples it returned again on next sample().'''
         if verbose: self.log.info('resetting.')
         self._number_of_samples_until_now = 0
         self._last_label_nr = 0
-        self._reset() # give subclass a change to react
+        self._reset(**kws) # give subclass a change to react
 
 
     def is_trainable(self):
@@ -362,7 +362,7 @@ class DataSource(mdp.Node):
     def __setstate__(self, d):
         self.__dict__ = d
         self.add_logger()
-        self.reset()
+        self.reset(verbose=True)
 
 
     def __str__(self):
@@ -447,8 +447,9 @@ class FlowDataSource(DataSource):
         return self.flow[0]._get_labels(n, start)
     
         
-    def _reset(self):
-        self.flow[0].reset()
+    def _reset(self, **kws):
+        super(FlowDataSource,self)._reset(**kws)
+        self.flow[0].reset(**kws) # call mdp's reset()
 
 
     def _samples(self,n=1, **kws):
@@ -474,7 +475,8 @@ class FlowDataSource(DataSource):
     
     def __add__(self, other):
         self.flow += other
-        assert isinstance(other, mdp.Node)
+        assert not isinstance(other, DataSource), 'Only the first item in a FlowDataSource can be a DataSource. The others must be mdp.Nodes.'
+        assert isinstance(other, mdp.Node) or isinstance(other, mdp.Flow)
         self._output_dim = self.flow[-1].output_dim
         return self
     
@@ -505,12 +507,12 @@ class SeededDataSource(DataSource):
         self.random = S.random.RandomState(seed=self.seed)
 
 
-    def reset(self, seed=None, **kws):
-        DataSource.reset(self, **kws)
+    def reset(self, seed=None, verbose=True, **kws):
+        super(SeededDataSource,self).reset(verbose=verbose, **kws)
         if seed is None:
-            self.log.info('Resetting random seed to initial value %s',self.seed)
+            if verbose: self.log.info('Resetting random seed to initial value %s',self.seed)
             seed = self.seed
-        self.log.info('Resetting random seed to value %s',str(seed))
+        if verbose: self.log.info('Resetting random seed to value %s',str(seed))
         self.random = S.random.RandomState(seed=seed)
         
 
@@ -895,9 +897,10 @@ class CascadedDataSource(DataSource):
         return self._collected_labels[start:start+n]
 
 
-    def _reset(self):
+    def _reset(self, **kws):
+        super(CascadedDataSource,self)._reset(**kws)
         self._collected_labels = []
-        self._source.reset()
+        self._source.reset(**kws)
 
 
     def __str__(self):
