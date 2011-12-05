@@ -306,7 +306,7 @@ class DataSource(mdp.Node):
 
     def reset(self,verbose=True, **kws):
         '''Resetting this datasource, so the first samples it returned again on next sample().'''
-        if verbose: self.log.info('resetting.')
+        if verbose: self.log.debug('resetting.')
         self._number_of_samples_until_now = 0
         self._last_label_nr = 0
         self._reset(**kws) # give subclass a change to react
